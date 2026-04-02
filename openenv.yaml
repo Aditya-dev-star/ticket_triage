@@ -1,0 +1,34 @@
+spec_version: 1
+name: ticket_triage
+type: space
+runtime: fastapi
+app: server.app:app
+entrypoint: server.app:main
+port: 8000
+tasks:
+  - id: easy
+    description: Refund an erroneous transaction.
+  - id: medium
+    description: Query the KB and articulate the return policy.
+  - id: hard
+    description: Investigate hacked account, secure, and refund.
+observation_space:
+  type: json
+  schema: TicketTriageObservation
+action_space:
+  type: json
+  schema: TicketTriageAction
+reward:
+  type: float
+  range: [-1.0, 1.0]
+endpoints:
+  - /step
+  - /reset
+  - /state
+  - /tasks
+  - /grader
+  - /baseline
+baseline_scores:
+  easy: 1.0
+  medium: 1.0
+  hard: 0.85

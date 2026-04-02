@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openenv-ticket_triage"
+version = "0.1.0"
+description = "Ticket Triage environment for OpenEnv"
+requires-python = ">=3.10"
+dependencies = [
+    "openenv-core[core]>=0.2.1",
+    "openai",
+    "requests",
+    "fastapi",
+    "uvicorn",
+    "pydantic"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.scripts]
+server = "ticket_triage.server.app:main"
+
+[tool.setuptools]
+include-package-data = true
+packages = ["ticket_triage", "ticket_triage.server"]
+package-dir = { "ticket_triage" = ".", "ticket_triage.server" = "server" }
