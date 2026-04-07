@@ -1,3 +1,12 @@
+import sys
+import os
+
+# Ensure the root directory is in sys.path so 'models' can be imported when running `python server/app.py`
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
 try:
     from openenv.core.env_server.http_server import create_app
 except ImportError as e:
@@ -11,7 +20,9 @@ except (ModuleNotFoundError, ImportError):
     from server.ticket_triage_environment import TicketTriageEnvironment
 
 import os
-from fastapi.responses import HTMLResponse
+import json
+import asyncio
+from fastapi.responses import HTMLResponse, StreamingResponse
 
 app = create_app(
     TicketTriageEnvironment,
@@ -41,29 +52,59 @@ TASK_ACTIONS = [
 
 @app.get("/simulate")
 def simulate_task(task_index: int = 0):
-    """Runs a full optimal-agent simulation for the given task index (0=easy,1=medium,2=hard).
-    Returns the complete step log so the frontend never needs to manage sessions."""
+    """Streams a full optimal-agent simulation step-by-step via Server-Sent Events."""
     task_index = max(0, min(2, task_index))
-    env = TicketTriageEnvironment()
-    env.current_task_idx = task_index
-    env._reset_count = task_index + 1  # ensure task doesn't cycle
-    obs = env.reset(task_index=task_index)
+    
+    async def sse_generator():
+        env = TicketTriageEnvironment()
+        env.current_task_idx = task_index
+        env._reset_count = task_index + 1  # ensure task doesn't cycle
+        obs = env.reset(task_index=task_index)
 
-    log = [{"type": "reset", "ticket": obs.current_ticket}]
-    for action_data in TASK_ACTIONS[task_index]:
-        action = TicketTriageAction(**action_data)
-        obs = env.step(action)
-        log.append({
-            "type": "step",
-            "action_type": action_data["action_type"],
-            "feedback": obs.system_feedback,
-            "reward": obs.reward,
-            "done": obs.done,
-        })
-        if obs.done:
-            break
+        init_data = {"type": "reset", "ticket": obs.current_ticket}
+        yield f"data: {json.dumps(init_data)}\n\n"
+        await asyncio.sleep(0.8)
 
-    return {"log": log, "total_reward": sum(s["reward"] for s in log if s["type"] == "step")}
+        total_reward = 0.0
+        for action_data in TASK_ACTIONS[task_index]:
+            action = TicketTriageAction(**action_data)
+            obs = env.step(action)
+            step_data = {
+                "type": "step",
+                "action_type": action_data["action_type"],
+                "feedback": obs.system_feedback,
+                "reward": obs.reward,
+                "done": obs.done,
+            }
+            total_reward += obs.reward
+            yield f"data: {json.dumps(step_data)}\n\n"
+            await asyncio.sleep(1.2)
+            if obs.done:
+                break
+                
+        yield f"data: {json.dumps({'type': 'done', 'total_reward': total_reward})}\n\n"
+
+    return StreamingResponse(sse_generator(), media_type="text/event-stream")
+
+@app.get("/api/analytics")
+def get_analytics():
+    """Mock BI Analytics data for dashboard visualization."""
+    return {
+        "metrics": {
+            "avg_resolution_time": "2m 14s",
+            "agent_accuracy": "94.2%",
+            "total_tickets": 1420
+        },
+        "trends": {
+            "labels": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+            "agent_scores": [0.85, 0.88, 0.91, 0.89, 0.94, 0.96, 0.98],
+            "human_scores": [0.92, 0.91, 0.93, 0.90, 0.92, 0.91, 0.93]
+        },
+        "categories": {
+            "labels": ["Refunds", "Policy Questions", "Fraud", "Tech Support"],
+            "data": [45, 25, 15, 15]
+        }
+    }
 
 @app.get("/")
 def serve_frontend():
