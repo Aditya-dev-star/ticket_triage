@@ -76,11 +76,11 @@ SYSTEM_PROMPT = textwrap.dedent("""\
 # Core inference loop
 # ---------------------------------------------------------------------------
 
-def run_inference(api_key: str, model: str, naive: bool, verbose: bool) -> dict:
+def run_inference(api_key: str, api_base: str, model: str, naive: bool, verbose: bool) -> dict:
     """
     Runs the agent against all 3 tasks and returns a dict of scores.
     """
-    llm_client = OpenAI(api_key=api_key) if (api_key and OpenAI and not naive) else None
+    llm_client = OpenAI(api_key=api_key, base_url=api_base) if (api_key and OpenAI and not naive) else None
     agent_mode = "naive" if naive else ("openai:" + model if llm_client else "heuristic")
 
     # Mandatory structured evaluation lines.
@@ -186,18 +186,17 @@ if __name__ == "__main__":
     parser.add_argument("--score-only", action="store_true",   help="Print only machine-readable JSON scores")
     args = parser.parse_args()
 
-    api_key = os.environ.get("OPENAI_API_KEY", "") or os.environ.get('HF_TOKEN', '')
-    api_base = os.environ.get("API_BASE_URL", "")
-    model_name = os.environ.get("MODEL_NAME", args.model)
+    API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
+    MODEL_NAME = os.getenv("MODEL_NAME", args.model)
+    HF_TOKEN = os.getenv("HF_TOKEN")
 
-    if api_base:
-        # Required in some pre-submission validators (for API endpoint access)
-        os.environ['OPENAI_API_BASE'] = api_base
+    LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 
     try:
         scores = run_inference(
-            api_key=api_key,
-            model=model_name,
+            api_key=HF_TOKEN or os.environ.get("OPENAI_API_KEY", ""),
+            api_base=API_BASE_URL,
+            model=MODEL_NAME,
             naive=args.naive,
             verbose=args.verbose and not args.score_only,
         )
