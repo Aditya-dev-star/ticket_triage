@@ -5,6 +5,51 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TriageX — OpenEnv Agent Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js">
+    function switchTab(tab) {
+        document.getElementById('triageView').style.display = tab === 'triage' ? 'block' : 'none';
+        document.getElementById('analyticsView').style.display = tab === 'analytics' ? 'block' : 'none';
+        document.getElementById('btnTriage').className = 'tab-btn' + (tab === 'triage' ? ' active' : '');
+        document.getElementById('btnAnalytics').className = 'tab-btn' + (tab === 'analytics' ? ' active' : '');
+    }
+
+    async function loadAnalytics() {
+        try {
+            const res = await fetch('/api/analytics');
+            const data = await res.json();
+            
+            document.getElementById('metric-time').textContent = data.metrics.avg_resolution_time;
+            
+            const ctxTrend = document.getElementById('trendChart').getContext('2d');
+            new Chart(ctxTrend, {
+                type: 'line',
+                data: {
+                    labels: data.trends.labels,
+                    datasets: [
+                        { label: 'AI Agent Accuracy', data: data.trends.agent_scores, borderColor: '#6366f1', tension: 0.4, fill: false },
+                        { label: 'Human Baseline', data: data.trends.human_scores, borderDash: [5,5], borderColor: '#facc15', tension: 0.4, fill: false }
+                    ]
+                },
+                options: { responsive: true, plugins: { legend: { labels: { color: '#f1f1f3' } }, title: { display: true, text: 'Agent Accuracy Over Time', color: '#f1f1f3'} }, scales: { y: { ticks: { color: '#808090' } }, x: { ticks: { color: '#808090' } } } }
+            });
+            
+            const ctxTotal = document.getElementById('categoryChart').getContext('2d');
+            new Chart(ctxTotal, {
+                type: 'doughnut',
+                data: {
+                    labels: data.categories.labels,
+                    datasets: [{
+                        data: data.categories.data,
+                        backgroundColor: ['#6366f1', '#22c55e', '#ef4444', '#facc15'],
+                        borderWidth: 0
+                    }]
+                },
+                options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: '#f1f1f3' } }, title: { display: true, text: 'Ticket Categories', color: '#f1f1f3' } } }
+            });
+        } catch(e) { console.error('Failed to load analytics', e); }
+    }
+
+</script>
     <style>
         :root {
             --bg: #07070a;
@@ -59,6 +104,26 @@
         .health-pill.fail .dot { background: var(--danger); animation: none; }
         @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
 
+        /* ── Tabs ── */
+        .tabs { display: flex; justify-content: center; gap: 16px; margin-bottom: 40px; }
+        .tab-btn {
+            background: var(--surface); color: var(--muted);
+            border: 1px solid var(--border); border-radius: 20px;
+            padding: 8px 24px; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+            transition: all 0.3s;
+        }
+        .tab-btn:hover { color: var(--text); border-color: var(--primary); }
+        .tab-btn.active { background: var(--primary); color: white; border-color: var(--primary); box-shadow: 0 0 15px var(--primary-glow); }
+        
+        /* ── Analytics ── */
+        .analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 40px; }
+        .chart-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 16px; padding: 24px;
+        }
+        .chart-card.wide { grid-column: span 2; }
+        @media(max-width: 768px) { .chart-card.wide { grid-column: span 1; } .analytics-grid { grid-template-columns: 1fr; } }
+        
         /* ── Main Layout ── */
         .page { max-width: 980px; margin: 0 auto; padding: 50px 24px; }
 
@@ -254,6 +319,13 @@
         </div>
     </header>
 
+    <div class="tabs">
+        <button class="tab-btn active" id="btnTriage" onclick="switchTab('triage')">Live Triage</button>
+        <button class="tab-btn" id="btnAnalytics" onclick="switchTab('analytics')">Analytics Hub</button>
+    </div>
+
+    <div id="triageView">
+
     <!-- Task Cards -->
     <div class="section-title">Environment Tasks</div>
     <div class="task-grid" id="taskGrid"></div>
@@ -310,6 +382,25 @@
             <thead><tr><th>Task</th><th>Optimal Agent</th><th>Naive Agent</th><th>Signal</th></tr></thead>
             <tbody id="compareBody"></tbody>
         </table>
+    </div>
+
+    </div>
+
+    <div id="analyticsView" style="display:none;">
+        <div class="section-title">Performance Metrics <span style="text-transform:none; font-weight:400; font-style:italic; padding-left:10px; opacity:0.75;">(Demonstration using synthetic mock data)</span></div>
+        <div class="analytics-grid">
+            <div class="chart-card wide">
+                <canvas id="trendChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <canvas id="categoryChart"></canvas>
+            </div>
+            <div class="chart-card" style="display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+                <h3 style="color:var(--muted); font-size:0.9rem; text-transform:uppercase; margin-bottom:10px;">Avg Resolution Time</h3>
+                <div id="metric-time" style="font-size:3.5rem; font-family:var(--mono); font-weight:700; color:var(--success);">--</div>
+                <p style="color:var(--muted); font-size:0.85rem; margin-top:5px;">Based on 1,420 simulated tickets</p>
+            </div>
+        </div>
     </div>
 
     <footer>
@@ -385,6 +476,8 @@
                     </div>`;
             });
         } catch(e) { console.error('Tasks load failed', e); }
+
+        loadAnalytics();
     };
 
     // ── Live Simulation ──
@@ -397,7 +490,6 @@
         const spinner = document.getElementById('simSpinner');
         const log     = document.getElementById('simLog');
         const taskIdx = parseInt(document.getElementById('taskSelect').value);
-        const actions = OPTIMAL_ACTIONS[taskIdx];
 
         btn.disabled = true;
         spinner.style.display = 'block';
@@ -406,30 +498,47 @@
         const append = html => { log.innerHTML += html; log.scrollTop = log.scrollHeight; };
 
         try {
-            const res  = await fetch(`/simulate?task_index=${taskIdx}`);
-            if (!res.ok) { append(`<div class="log-entry" style="color:#f87171">[ERROR] Server returned ${res.status}</div>`); return; }
-            const data = await res.json();
-
-            for (const entry of data.log) {
-                await new Promise(r => setTimeout(r, 500));
-                if (entry.type === 'reset') {
-                    append(`<div class="log-entry"><span class="log-step">[RESET]</span> <span class="log-feedback">${entry.ticket}</span></div>`);
-                } else {
-                    const rClass = entry.reward >= 0 ? 'log-reward' : 'log-reward neg';
-                    append(`<div class="log-entry">
-                        <span class="log-step">[STEP]</span>
-                        <span class="log-action"> ${entry.action_type.toUpperCase()}</span>
-                        &nbsp;→&nbsp;
-                        <span class="log-feedback">${entry.feedback}</span>
-                        &nbsp;
-                        <span class="${rClass}">r=${entry.reward >= 0 ? '+' : ''}${entry.reward.toFixed(2)}</span>
-                    </div>`);
+            const response = await fetch(`/simulate?task_index=${taskIdx}`);
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+                
+                for (let line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const payload = line.replace('data: ', '');
+                        if (!payload.trim()) continue;
+                        
+                        try {
+                            const entry = JSON.parse(payload);
+                            
+                            if (entry.type === 'reset') {
+                                append(`<div class="log-entry"><span class="log-step">[RESET]</span> <span class="log-feedback">${entry.ticket}</span></div>`);
+                            } else if (entry.type === 'step') {
+                                const rClass = entry.reward >= 0 ? 'log-reward' : 'log-reward neg';
+                                append(`<div class="log-entry">
+                                    <span class="log-step">[STEP]</span>
+                                    <span class="log-action"> ${entry.action_type.toUpperCase()}</span>
+                                    &nbsp;→&nbsp;
+                                    <span class="log-feedback">${entry.feedback}</span>
+                                    &nbsp;
+                                    <span class="${rClass}">r=${entry.reward >= 0 ? '+' : ''}${entry.reward.toFixed(2)}</span>
+                                </div>`);
+                            } else if (entry.type === 'done') {
+                                append(`<div class="log-entry" style="margin-top:8px;border-top:1px solid #2a2a35;padding-top:8px;">
+                                    <span class="log-step">[DONE]</span>
+                                    <span class="log-reward"> Total Reward: +${entry.total_reward.toFixed(2)}</span>
+                                </div>`);
+                            }
+                        } catch(e) {}
+                    }
                 }
             }
-            append(`<div class="log-entry" style="margin-top:8px;border-top:1px solid #2a2a35;padding-top:8px;">
-                <span class="log-step">[DONE]</span>
-                <span class="log-reward"> Total Reward: +${data.total_reward.toFixed(2)}</span>
-            </div>`);
         } catch(e) {
             append(`<div class="log-entry" style="color:#f87171">Error: ${e.message}. Ensure the server is running.</div>`);
         } finally {
@@ -525,6 +634,50 @@
             spn.style.display = 'none';
         }
     }
+
+    function switchTab(tab) {
+        document.getElementById('triageView').style.display = tab === 'triage' ? 'block' : 'none';
+        document.getElementById('analyticsView').style.display = tab === 'analytics' ? 'block' : 'none';
+        document.getElementById('btnTriage').className = 'tab-btn' + (tab === 'triage' ? ' active' : '');
+        document.getElementById('btnAnalytics').className = 'tab-btn' + (tab === 'analytics' ? ' active' : '');
+    }
+
+    async function loadAnalytics() {
+        try {
+            const res = await fetch('/api/analytics');
+            const data = await res.json();
+            
+            document.getElementById('metric-time').textContent = data.metrics.avg_resolution_time;
+            
+            const ctxTrend = document.getElementById('trendChart').getContext('2d');
+            new Chart(ctxTrend, {
+                type: 'line',
+                data: {
+                    labels: data.trends.labels,
+                    datasets: [
+                        { label: 'AI Agent Accuracy', data: data.trends.agent_scores, borderColor: '#6366f1', tension: 0.4, fill: false },
+                        { label: 'Human Baseline', data: data.trends.human_scores, borderDash: [5,5], borderColor: '#facc15', tension: 0.4, fill: false }
+                    ]
+                },
+                options: { responsive: true, plugins: { legend: { labels: { color: '#f1f1f3' } }, title: { display: true, text: 'Agent Accuracy Over Time', color: '#f1f1f3'} }, scales: { y: { ticks: { color: '#808090' } }, x: { ticks: { color: '#808090' } } } }
+            });
+            
+            const ctxTotal = document.getElementById('categoryChart').getContext('2d');
+            new Chart(ctxTotal, {
+                type: 'doughnut',
+                data: {
+                    labels: data.categories.labels,
+                    datasets: [{
+                        data: data.categories.data,
+                        backgroundColor: ['#6366f1', '#22c55e', '#ef4444', '#facc15'],
+                        borderWidth: 0
+                    }]
+                },
+                options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: '#f1f1f3' } }, title: { display: true, text: 'Ticket Categories', color: '#f1f1f3' } } }
+            });
+        } catch(e) { console.error('Failed to load analytics', e); }
+    }
+
 </script>
 </body>
 </html>
