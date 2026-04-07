@@ -23,10 +23,25 @@ class TicketTriageEnvironment(Environment):
         self.max_steps = 10
         self.progress = 0
 
-    def reset(self, task_index: int = None) -> TicketTriageObservation:
-        self._state = State(episode_id=str(uuid4()), step_count=0)
-        # Allow callers to pin a specific task, otherwise cycle naturally
-        if task_index is not None and 0 <= task_index <= 2:
+    def reset(self, task_index: int = None, **kwargs) -> TicketTriageObservation:
+        episode_id = kwargs.get("episode_id", str(uuid4()))
+        self._state = State(episode_id=episode_id, step_count=0)
+        # Allow callers to pin a specific task
+        
+        # Handle string inputs gracefully if passed by grader via POST /reset 
+        if isinstance(task_index, str):
+            if task_index.lower() == "easy":
+                task_index = 0
+            elif task_index.lower() == "medium":
+                task_index = 1
+            elif task_index.lower() == "hard":
+                task_index = 2
+            elif task_index.isdigit():
+                task_index = int(task_index)
+            else:
+                task_index = None
+
+        if task_index is not None and isinstance(task_index, int) and 0 <= task_index <= 2:
             self.current_task_idx = task_index
         else:
             self.current_task_idx = self._reset_count % 3

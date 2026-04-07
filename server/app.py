@@ -21,14 +21,8 @@ app = create_app(
     max_concurrent_envs=1000,
 )
 
-# openenv's /state route has a ResponseValidationError due to an internal response wrapper type.
-# Remove it and register our own clean version that returns plain JSON.
-app.routes[:] = [r for r in app.routes if not (hasattr(r, 'path') and r.path == '/state')]
-
-@app.get("/state")
-def state_endpoint():
-    """Returns the current state of the most recently used session."""
-    return {"status": "ready", "spec_version": 1}
+# OpenEnv's /state route generates a Pydantic ResponseValidationError in OpenEnv<0.3
+# if the environment's state() returns the State object properly. We will let it be.
 
 TASK_ACTIONS = [
     # Easy
