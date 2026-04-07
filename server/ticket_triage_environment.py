@@ -13,6 +13,17 @@ except (ModuleNotFoundError, ImportError):
 # Dictionary linking episode boundaries to active grader scores.
 session_grader_scores = {}
 
+MOCK_DATABASE = {
+    "tx_123": {"user_id": "u_111", "amount": 25.0, "status": "processed"},
+    "tx_999": {"user_id": "u_456", "amount": 50.0, "status": "processed"},
+    "u_456": {"status": "Hacked", "name": "Jane Doe", "risk_level": "High"}
+}
+
+MOCK_KNOWLEDGE_BASE = {
+    "return policy": "Electronics return policy is 30 days. Apparel is 14 days.",
+    "refund policy": "Refunds take 3-5 business days to appear on the statement."
+}
+
 class TicketTriageEnvironment(Environment):
     SUPPORTS_CONCURRENT_SESSIONS = True
 
@@ -107,11 +118,23 @@ class TicketTriageEnvironment(Environment):
             q = (action.query or "").lower()
             msg = (action.message or "").lower()
             
-            if action.action_type == "view_kb" and "return" in q and self.progress == 0:
-                self.progress = 1
-                grader_score += 0.4
-                reward = 0.15
-                feedback = "KB Article: Electronics return policy is 30 days."
+            if action.action_type == "view_kb":
+                # Mock RAG lookup
+                kb_result = MOCK_KNOWLEDGE_BASE.get(q, None)
+                if not kb_result:
+                    for k, v in MOCK_KNOWLEDGE_BASE.items():
+                        if q in k:
+                            kb_result = v
+                            break
+
+                if kb_result and "return" in q and self.progress == 0:
+                    self.progress = 1
+                    grader_score += 0.4
+                    reward = 0.15
+                    feedback = f"KB Article: {kb_result}"
+                else:
+                    reward = 0.0
+                    feedback = "KB query returned no relevant results or was executed out of order."
             elif action.action_type == "reply" and self.progress == 1:
                 grader_score += 0.3
                 reward = 0.15
@@ -138,16 +161,18 @@ class TicketTriageEnvironment(Environment):
                 reward = -0.1
                 feedback = "Action denied. You cannot refund without investigating the transaction first."
             elif action.action_type == "query_db":
-                if "tx_999" in q and self.progress == 0:
+                db_result = MOCK_DATABASE.get(q, None)
+                
+                if db_result and "tx_999" in q and self.progress == 0:
                     self.progress = 1
                     grader_score += 0.25
                     reward = 0.15
-                    feedback = "DB Record: Transaction tx_999 belongs to User u_456, amount: $50."
-                elif "u_456" in q and self.progress == 1:
+                    feedback = f"DB Record: Transaction tx_999 belongs to User {db_result['user_id']}, amount: ${db_result['amount']}."
+                elif db_result and "u_456" in q and self.progress == 1:
                     self.progress = 2
                     grader_score += 0.25
                     reward = 0.15
-                    feedback = "DB Record: User u_456 account status is Hacked."
+                    feedback = f"DB Record: User u_456 account status is {db_result['status']}."
                 else:
                     reward = 0.0
                     feedback = "DB query returned no relevant results or was executed out of order."
