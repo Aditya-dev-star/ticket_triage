@@ -66,9 +66,9 @@ Tests executing the internal `client.py` yield mathematically verifiable varianc
 
 | Environment Difficulty | Heuristic (Optimal) Baseline | Naive (Random) Agent |
 |------------------------|------------------------------|----------------------|
-| **Easy**               | 1.00                         | 0.00                 |
-| **Medium**             | 1.00                         | 0.00                 |
-| **Hard**               | 1.00                         | 0.00                 |
+| **Easy**               | 0.99                         | 0.01                 |
+| **Medium**             | 0.99                         | 0.01                 |
+| **Hard**               | 0.99                         | 0.01                 |
 
 *Naive Agents instantly force failure by improperly replying rather than executing intermediate tasks correctly, demonstrating zero static score leakage*.
 
