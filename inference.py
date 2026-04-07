@@ -76,20 +76,24 @@ SYSTEM_PROMPT = textwrap.dedent("""\
 # Core inference loop
 # ---------------------------------------------------------------------------
 
+def log_start(task: str, env: str, model: str) -> None:
+    print(f"[START] task={task} env={env} model={model}", flush=True)
+
+def log_step(step: int, action: str, reward: float, done: bool, error: str = None) -> None:
+    error_val = error if error else "null"
+    done_val = str(done).lower()
+    print(f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}", flush=True)
+
+def log_end(success: bool, steps: int, score: float, rewards: list) -> None:
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
+
 def run_inference(api_key: str, api_base: str, model: str, naive: bool, verbose: bool) -> dict:
     """
     Runs the agent against all 3 tasks and returns a dict of scores.
     """
     llm_client = OpenAI(api_key=api_key, base_url=api_base) if (api_key and OpenAI and not naive) else None
     agent_mode = "naive" if naive else ("openai:" + model if llm_client else "heuristic")
-
-    # Mandatory structured evaluation lines.
-    print('[START] ' + json.dumps({
-        'agent_mode': agent_mode,
-        'model': model,
-        'task_count': 3,
-        'timestamp': datetime.now().isoformat(),
-    }))
 
     if verbose:
         print(f"\n{'='*60}")
@@ -107,16 +111,20 @@ def run_inference(api_key: str, api_base: str, model: str, naive: bool, verbose:
         done = False
         step = 0
         episode_rewards = []
+        
+        log_start(task=difficulty, env="ticket_triage", model=model)
 
         if verbose:
             print(f"  ── Task [{episode+1}/3] difficulty={difficulty} ──")
             print(f"  Ticket: {obs.current_ticket}\n")
 
         while not done and step < 10:
+            step += 1
             # ---------- Choose action ----------
+            action_error = None
             if naive:
                 path = NAIVE_PATHS.get(difficulty, [])
-                action_data = path[step] if step < len(path) else {"action_type": "escalate"}
+                action_data = path[step-1] if (step-1) < len(path) else {"action_type": "escalate"}
 
             elif llm_client:
                 messages.append({"role": "user", "content": f"Observation: {obs.model_dump()}"})
@@ -130,21 +138,24 @@ def run_inference(api_key: str, api_base: str, model: str, naive: bool, verbose:
                     action_data = json.loads(action_json)
                     messages.append({"role": "assistant", "content": action_json})
                 except Exception as exc:
+                    action_error = str(exc)
                     if verbose:
                         print(f"  [LLM ERROR] {exc} — using heuristic fallback")
                     path = HEURISTIC_PATHS.get(difficulty, [])
-                    action_data = path[step] if step < len(path) else {"action_type": "reply", "message": "fallback"}
+                    action_data = path[step-1] if (step-1) < len(path) else {"action_type": "reply", "message": "fallback"}
 
             else:
                 path = HEURISTIC_PATHS.get(difficulty, [])
-                action_data = path[step] if step < len(path) else {"action_type": "reply", "message": "fallback"}
+                action_data = path[step-1] if (step-1) < len(path) else {"action_type": "reply", "message": "fallback"}
 
             # ---------- Execute action ----------
             action_obj = TicketTriageAction(**action_data)
             obs = env.step(action_obj)
             episode_rewards.append(obs.reward)
             done = obs.done
-            step += 1
+
+            action_repr = json.dumps(action_data).replace(' ', '')
+            log_step(step=step, action=action_repr, reward=obs.reward, done=done, error=action_error)
 
             if verbose:
                 reward_str = f"+{obs.reward:.2f}" if obs.reward >= 0 else f"{obs.reward:.2f}"
@@ -152,22 +163,15 @@ def run_inference(api_key: str, api_base: str, model: str, naive: bool, verbose:
 
         final_score = session_grader_scores.get(env._state.episode_id, 0.0)
         results[difficulty] = final_score
+        
+        success = final_score > 0.0
 
         if verbose:
             cumulative = sum(episode_rewards)
             print(f"\n  ✔ Episode complete — grader_score={final_score:.2f}  |  cumulative_reward={cumulative:.2f}\n")
 
-        # Structured step log required by evaluator.
-        print('[STEP] ' + json.dumps({
-            'task': difficulty,
-            'episode': episode,
-            'grader_score': final_score,
-            'cumulative_reward': sum(episode_rewards),
-            'done': obs.done,
-            'steps': step,
-        }))
+        log_end(success=success, steps=step, score=final_score, rewards=episode_rewards)
 
-    print('[END] ' + json.dumps({'scores': results, 'timestamp': datetime.now().isoformat()}))
     return results
 
 
