@@ -168,8 +168,8 @@ class TicketTriageEnvironment(Environment):
             else:
                 reward = 0.0
 
-        # Cap and save session score
-        session_grader_scores[self._state.episode_id] = min(max(grader_score, 0.0), 1.0)
+        # Cap and save session score within OpenEnv mandatory bounds of (0, 1) strictly
+        session_grader_scores[self._state.episode_id] = min(max(grader_score, 0.01), 0.99)
 
         return TicketTriageObservation(
             current_ticket=ticket,

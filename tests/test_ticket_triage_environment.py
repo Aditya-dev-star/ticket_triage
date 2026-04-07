@@ -18,7 +18,7 @@ def test_optimal_easy_path_returns_one():
         obs = env.step(action)
 
     assert obs.done is True
-    assert session_grader_scores[env._state.episode_id] == pytest.approx(1.0, abs=1e-6)
+    assert session_grader_scores[env._state.episode_id] == pytest.approx(0.99, abs=1e-6)
 
 
 def test_optimal_medium_path_returns_one():
@@ -35,7 +35,7 @@ def test_optimal_medium_path_returns_one():
         obs = env.step(action)
 
     assert obs.done is True
-    assert session_grader_scores[env._state.episode_id] == pytest.approx(1.0, abs=1e-6)
+    assert session_grader_scores[env._state.episode_id] == pytest.approx(0.99, abs=1e-6)
 
 
 def test_optimal_hard_path_returns_one():
@@ -54,7 +54,7 @@ def test_optimal_hard_path_returns_one():
         obs = env.step(action)
 
     assert obs.done is True
-    assert session_grader_scores[env._state.episode_id] == pytest.approx(1.0, abs=1e-6)
+    assert session_grader_scores[env._state.episode_id] == pytest.approx(0.99, abs=1e-6)
 
 
 def test_wrong_order_easy_path_gives_less_than_one():
